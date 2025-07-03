@@ -1,8 +1,10 @@
 {
     "domain": "geberit_home_bt",
     "name": "Geberit Home",
-    "version": "v2025.07.01",
+    "version": "2025.07.01",
+    "documentation": "https://github.com/twoenter/geberit_home_bt",
     "requirements": ["bleak"],
     "dependencies": [],
+    "codeowners": ["@twoenter"],
     "config_flow": true
   }
