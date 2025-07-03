@@ -1,0 +1,18 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configure Geberit Device",
+        "description": "Enter the MAC address of your Geberit device and select the correct device type.",
+        "data": {
+          "address": "MAC Address",
+          "device_type": "Device Type"
+        }
+      }
+    },
+    "error": {
+      "invalid_mac": "Invalid MAC address.",
+      "invalid_type": "Invalid device type selected."
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+    "domain": "geberit_home_bt",
+    "name": "Geberit Home",
+    "version": "v2025.07.01",
+    "requirements": ["bleak"],
+    "dependencies": [],
+    "config_flow": true
+  }
