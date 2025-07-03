@@ -35,5 +35,9 @@ class GeberitConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required("address"): str,
                 vol.Required("device_type", default="Geberit Duo Fresh"): vol.In(DEVICE_TYPES)
             }),
-            errors=errors
+            errors=errors,
+            description_placeholders={
+                "mac_help": "e.g. AA:BB:CC:DD:EE:FF",
+                "type_help": "Select your Geberit device type"
+            },
         )

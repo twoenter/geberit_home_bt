@@ -6,18 +6,8 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-# BLE Characteristics for Duo Fresh
-CHARACTERISTIC_MAP_DUOFRESH = {
-    "00002a24-0000-1000-8000-00805f9b34fb": "Model Number",
-    "00002a25-0000-1000-8000-00805f9b34fb": "Serial Number",
-    "00002a26-0000-1000-8000-00805f9b34fb": "Firmware Revision",
-    "00002a27-0000-1000-8000-00805f9b34fb": "Hardware Revision",
-    "00002a28-0000-1000-8000-00805f9b34fb": "Software Revision",
-    "00002a29-0000-1000-8000-00805f9b34fb": "Manufacturer"
-}
-
-# BLE Characteristics for Mera Classic 
-CHARACTERISTIC_MAP_MERA_CLASSIC = {
+# BLE Characteristics for both Duo Fresh and Mera Classic
+CHARACTERISTIC_MAP = {
     "00002a24-0000-1000-8000-00805f9b34fb": "Model Number",
     "00002a25-0000-1000-8000-00805f9b34fb": "Serial Number",
     "00002a26-0000-1000-8000-00805f9b34fb": "Firmware Revision",
@@ -32,7 +22,9 @@ DEVICE_CLASS_MAP = {
 
 
 class GeberitStaticSensor(SensorEntity):
-    def __init__(self, processor, uuid, name, address, serial):
+    def __init__(
+        self, processor, uuid, name, address, serial, model, sw_version=None, hw_version=None, firmware_version=None
+    ):
         self._processor = processor
         self._uuid = uuid
         self._address = address
@@ -43,6 +35,10 @@ class GeberitStaticSensor(SensorEntity):
         self._attr_device_class = DEVICE_CLASS_MAP.get(name)
         self._attr_unit_of_measurement = UNIT_MAP.get(name)
         self._attr_state_class = STATE_CLASS_MAP.get(name)
+        self._model = model
+        self._sw_version = sw_version
+        self._hw_version = hw_version
+        self._firmware_version = firmware_version
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -51,8 +47,10 @@ class GeberitStaticSensor(SensorEntity):
             connections={(dr.CONNECTION_NETWORK_MAC, self._address)},
             manufacturer="Geberit",
             name="Geberit Toilet",
-            model="DuoFresh / Mera",
-            sw_version=None,  # optioneel invullen
+            model=self._model,
+            sw_version=self._sw_version,
+            hw_version=self._hw_version,
+            firmware_version=self._firmware_version,
         )
 
     async def async_update(self):
@@ -67,16 +65,11 @@ class GeberitStaticSensor(SensorEntity):
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
     processor = hass.data[DOMAIN][config_entry.entry_id]
-    device_type = config_entry.data.get("device_type", "Geberit Duo Fresh")
     address = config_entry.data.get("address")
+    device_type = config_entry.data.get("device_type", "DuoFresh / Mera")
 
-    # Select correct characteristic map
-    if device_type == "Geberit Mera Classic":
-        characteristic_map = CHARACTERISTIC_MAP_MERA_CLASSIC
-    else:
-        characteristic_map = CHARACTERISTIC_MAP_DUOFRESH
+    characteristic_map = CHARACTERISTIC_MAP
 
-    # Read GATT values needed for device registry
     gatt_data = {}
 
     if processor.client and processor.client.is_connected:
@@ -87,30 +80,36 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
             except Exception as e:
                 _LOGGER.warning(f"Failed to read {name} ({uuid}): {e}")
 
-    # Register device in Home Assistant's device registry
-    device_registry = dr.async_get(hass)
-
-    model_id = gatt_data.get("Model Number", "Unknown Model")
+    model_id = gatt_data.get("Model Number", device_type)
     serial = gatt_data.get("Serial Number", address)
     sw_version = gatt_data.get("Software Revision", "")
     hw_version = gatt_data.get("Hardware Revision", "")
+    firmware_version = gatt_data.get("Firmware Revision", "")
     manufacturer = gatt_data.get("Manufacturer", "Geberit")
 
+    device_registry = dr.async_get(hass)
     device_registry.async_get_or_create(
         config_entry_id=config_entry.entry_id,
         identifiers={(DOMAIN, serial)},
         connections={(dr.CONNECTION_NETWORK_MAC, address)},
         manufacturer=manufacturer,
-        name=f"Geberit {device_type}",
+        name=f"{model_id}",
         model=model_id,
         sw_version=sw_version,
         hw_version=hw_version,
-        suggested_area="Bathroom",  # Of dynamisch via config_entry.data.get(...)
+        firmware_version=firmware_version,
+        suggested_area="Bathroom",
         via_device=(DOMAIN, address)
     )
 
-    # Entiteiten aanmaken
     entities = []
     for uuid, name in characteristic_map.items():
-        entities.append(GeberitStaticSensor(processor, uuid, name, address, serial))
+        entities.append(
+            GeberitStaticSensor(
+                processor, uuid, name, address, serial, model_id,
+                sw_version=sw_version,
+                hw_version=hw_version,
+                firmware_version=firmware_version
+            )
+        )
     async_add_entities(entities)

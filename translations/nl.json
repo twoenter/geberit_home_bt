@@ -2,13 +2,17 @@
   "config": {
     "step": {
       "user": {
-        "title": "Instellen Geberit-apparaat",
-        "description": "Voer het MAC-adres en type apparaat in."
+        "title": "Configureer Geberit-apparaat",
+        "description": "Voer het MAC-adres van je Geberit-apparaat in en selecteer het juiste apparaattype.",
+        "data": {
+          "address": "MAC-adres",
+          "device_type": "Apparaattype"
+        }
       }
     },
     "error": {
       "invalid_mac": "Ongeldig MAC-adres.",
-      "invalid_type": "Ongeldig apparaattype."
+      "invalid_type": "Ongeldig apparaattype geselecteerd."
     }
   }
 }
