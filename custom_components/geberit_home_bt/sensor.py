@@ -26,7 +26,7 @@ STATE_CLASS_MAP = {}
 
 class GeberitStaticSensor(SensorEntity):
     def __init__(
-        self, processor, uuid, name, address, serial, model, sw_version=None, hw_version=None, firmware_version=None
+        self, processor, uuid, name, address, serial, model, value=None, sw_version=None, hw_version=None, firmware_version=None
     ):
         self._processor = processor
         self._uuid = uuid
@@ -42,6 +42,7 @@ class GeberitStaticSensor(SensorEntity):
         self._sw_version = sw_version
         self._hw_version = hw_version
         self._firmware_version = firmware_version
+        self._attr_native_value = value  # <-- waarde van de characteristic
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -62,7 +63,7 @@ class GeberitStaticSensor(SensorEntity):
         try:
             value = await self._processor.client.read_gatt_char(self._uuid)
             decoded = bytes(value).decode(errors="ignore")
-            self._value = decoded
+            self._attr_native_value = decoded
         except Exception as e:
             _LOGGER.warning(f"Failed to read {self._uuid}: {e}")
 
@@ -96,7 +97,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         identifiers={(DOMAIN, serial)},
         connections={(dr.CONNECTION_NETWORK_MAC, address)},
         manufacturer=manufacturer,
-        name=f"{model_id}",
+        name=f"{device_type}",
         model=model_id,
         sw_version=sw_version,
         hw_version=hw_version,
@@ -108,9 +109,11 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     entities = []
     for uuid, name in characteristic_map.items():
         try:
+            value = gatt_data.get(name)
             entities.append(
                 GeberitStaticSensor(
                     processor, uuid, name, address, serial, model_id,
+                    value=value,
                     sw_version=sw_version,
                     hw_version=hw_version,
                     firmware_version=firmware_version
