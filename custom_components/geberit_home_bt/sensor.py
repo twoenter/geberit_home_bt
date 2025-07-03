@@ -20,6 +20,9 @@ DEVICE_CLASS_MAP = {
     "Firmware Revision": "firmware",
 }
 
+UNIT_MAP = {}
+STATE_CLASS_MAP = {}
+
 
 class GeberitStaticSensor(SensorEntity):
     def __init__(
@@ -104,12 +107,15 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
     entities = []
     for uuid, name in characteristic_map.items():
-        entities.append(
-            GeberitStaticSensor(
-                processor, uuid, name, address, serial, model_id,
-                sw_version=sw_version,
-                hw_version=hw_version,
-                firmware_version=firmware_version
+        try:
+            entities.append(
+                GeberitStaticSensor(
+                    processor, uuid, name, address, serial, model_id,
+                    sw_version=sw_version,
+                    hw_version=hw_version,
+                    firmware_version=firmware_version
+                )
             )
-        )
+        except Exception as e:
+            _LOGGER.error(f"Failed to create sensor for {name} ({uuid}): {e}")
     async_add_entities(entities)
