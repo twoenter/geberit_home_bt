@@ -1,0 +1,6 @@
+{
+  "name": "Geberit Home",
+  "content_in_root": false,
+  "domains": ["integration"],
+  "homeassistant": "2023.0.0"
+}
