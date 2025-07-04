@@ -20,9 +20,6 @@ DEVICE_CLASS_MAP = {
     "Firmware Revision": "firmware",
 }
 
-UNIT_MAP = {}
-STATE_CLASS_MAP = {}
-
 
 class GeberitStaticSensor(SensorEntity):
     def __init__(
@@ -33,30 +30,25 @@ class GeberitStaticSensor(SensorEntity):
         self._address = address
         self._serial = serial  # uniek per apparaat
         self._attr_name = name
-        self._attr_unique_id = f"geberit_sensor_{self._serial}_{uuid.replace('-', '')}"
-
-        self._attr_device_class = DEVICE_CLASS_MAP.get(name)
-        self._attr_unit_of_measurement = UNIT_MAP.get(name)
-        self._attr_state_class = STATE_CLASS_MAP.get(name)
+        self._attr_unique_id = f"geberit_sensor_{serial}_{uuid.replace('-', '')}"
+        self._attr_native_value = value
         self._model = model
         self._sw_version = sw_version
         self._hw_version = hw_version
         self._firmware_version = firmware_version
-        self._attr_native_value = value  # <-- waarde van de characteristic
-        self._attr_should_poll = True
         self._device_type = device_type
 
     @property
     def device_info(self) -> DeviceInfo:
         return DeviceInfo(
-            identifiers={(DOMAIN, self._serial)},
-            connections={(dr.CONNECTION_NETWORK_MAC, self._address)},
-            manufacturer="Geberit",
-            name=self._device_type,  # <-- gebruik device_type als naam
-            model=self._model,
-            sw_version=self._sw_version,
-            hw_version=self._hw_version,
-            firmware_version=self._firmware_version,
+            identifiers = {(DOMAIN, self._serial)},
+            connections = {(dr.CONNECTION_NETWORK_MAC, self._address)},
+            manufacturer = "Geberit",
+            name = self._device_type or self._model,
+            model = self._model,
+            sw_version = self._sw_version,
+            hw_version = self._hw_version,
+            firmware_version = self._firmware_version,
         )
 
     async def async_update(self):
@@ -65,14 +57,14 @@ class GeberitStaticSensor(SensorEntity):
         try:
             value = await self._processor.client.read_gatt_char(self._uuid)
             decoded = bytes(value).decode(errors="ignore")
-            self._attr_native_value = decoded
+            self._attr_native_value = decoded  # <-- update de waarde
         except Exception as e:
             _LOGGER.warning(f"Failed to read {self._uuid}: {e}")
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
     processor = hass.data[DOMAIN][config_entry.entry_id]
     address = config_entry.data.get("address")
-    device_type = config_entry.data.get("device_type", "DuoFresh / Mera")
+    device_type = config_entry.data.get("device_type", "Geberit Duo Fresh")
 
     characteristic_map = CHARACTERISTIC_MAP
 
@@ -86,11 +78,27 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
             except Exception as e:
                 _LOGGER.warning(f"Failed to read {name} ({uuid}): {e}")
 
-    model_id = gatt_data.get("Model Number", "Unknown Model")
+    model_id = gatt_data.get("Model Number", device_type)
     serial = gatt_data.get("Serial Number", address)
     sw_version = gatt_data.get("Software Revision", "")
     hw_version = gatt_data.get("Hardware Revision", "")
     firmware_version = gatt_data.get("Firmware Revision", "")
+
+    entities = []
+    for uuid, name in CHARACTERISTIC_MAP.items():
+        value = gatt_data.get(name)
+        entities.append(
+            GeberitStaticSensor(
+                processor, uuid, name, address, serial, model_id,
+                value=value,
+                sw_version=sw_version,
+                hw_version=hw_version,
+                firmware_version=firmware_version,
+                device_type=device_type
+            )
+        )
+    async_add_entities(entities)
+
     manufacturer = gatt_data.get("Manufacturer", "Geberit")
 
     device_registry = dr.async_get(hass)
@@ -100,28 +108,6 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         connections={(dr.CONNECTION_NETWORK_MAC, address)},
         manufacturer=manufacturer,
         name=f"{device_type}",
-        model=model_id,
-        sw_version=sw_version,
-        hw_version=hw_version,
-        firmware_version=firmware_version,
         suggested_area="Bathroom",
         via_device=(DOMAIN, address)
     )
-
-    entities = []
-    for uuid, name in characteristic_map.items():
-        try:
-            value = gatt_data.get(name)
-            entities.append(
-                GeberitStaticSensor(
-                    processor, uuid, name, address, serial, model_id,
-                    value=value,
-                    sw_version=sw_version,
-                    hw_version=hw_version,
-                    firmware_version=firmware_version,
-                    device_type=device_type  # <-- voeg toe
-                )
-            )
-        except Exception as e:
-            _LOGGER.error(f"Failed to create sensor for {name} ({uuid}): {e}")
-    async_add_entities(entities)

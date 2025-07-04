@@ -6,7 +6,7 @@ from .const import WRITE_HANDLE
 _LOGGER = logging.getLogger(__name__)
 
 class BluetoothProcessor:
-    def __init__(self, address, device_type="Geberit Duo Fresh"):
+    def __init__(self, address, device_type="Geberit Toilet"):
         self.address = address
         self.device_type = device_type
         self.client = None
@@ -39,7 +39,7 @@ class BluetoothProcessor:
                         _LOGGER.warning(f"Failed to start notify on {char.uuid}: {e}")
 
             # Pas polling-interval aan op basis van type
-            interval = 0.1 if self.device_type == "Geberit Duo Fresh" else 1.0
+            interval = 1.0 
             await self.poll_characteristics(interval)
 
         except asyncio.CancelledError:

@@ -1,3 +1,5 @@
 # geberit_home_bt
 
-testing
+You can add this repo to HACS as a custom repo. 
+
+
