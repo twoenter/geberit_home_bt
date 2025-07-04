@@ -21,22 +21,56 @@ DEVICE_CLASS_MAP = {
 }
 
 
+import logging
+from homeassistant.components.sensor import SensorEntity
+from homeassistant.helpers.entity import EntityCategory
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers.device_registry import DeviceInfo
+from .const import DOMAIN
+
+_LOGGER = logging.getLogger(__name__)
+
+CHARACTERISTIC_MAP = {
+    "00002a24-0000-1000-8000-00805f9b34fb": "Model Number",
+    "00002a25-0000-1000-8000-00805f9b34fb": "Serial Number",
+    "00002a26-0000-1000-8000-00805f9b34fb": "Firmware Revision",
+    "00002a27-0000-1000-8000-00805f9b34fb": "Hardware Revision",
+    "00002a28-0000-1000-8000-00805f9b34fb": "Software Revision",
+    "00002a29-0000-1000-8000-00805f9b34fb": "Manufacturer"
+}
+
+DEVICE_CLASS_MAP = {
+    "Firmware Revision": "firmware",
+}
+
+
 class GeberitStaticSensor(SensorEntity):
     def __init__(
-        self, processor, uuid, name, address, serial, model, value=None, sw_version=None, hw_version=None, firmware_version=None, device_type=None
+        self, processor, uuid, name, address, serial, model, value=None,
+        sw_version=None, hw_version=None, device_type=None
     ):
         self._processor = processor
         self._uuid = uuid
         self._address = address
-        self._serial = serial  # uniek per apparaat
-        self._attr_name = name
-        self._attr_unique_id = f"geberit_sensor_{serial}_{uuid.replace('-', '')}"
-        self._attr_native_value = value
+        self._serial = serial
         self._model = model
         self._sw_version = sw_version
         self._hw_version = hw_version
-        self._firmware_version = firmware_version
         self._device_type = device_type
+        self._attr_native_value = value
+
+        self._attr_name = name
+        self._attr_unique_id = f"geberit_sensor_{serial}_{uuid.replace('-', '')}"
+
+        # Optional: classify the sensor as diagnostic
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
+
+        # Optional: assign device class if known (e.g. firmware)
+        self._attr_device_class = DEVICE_CLASS_MAP.get(name)
+
+    @property
+    def native_value(self):
+        return self._attr_native_value
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -48,7 +82,6 @@ class GeberitStaticSensor(SensorEntity):
             model = self._model,
             sw_version = self._sw_version,
             hw_version = self._hw_version,
-            firmware_version = self._firmware_version,
         )
 
     async def async_update(self):
@@ -57,57 +90,56 @@ class GeberitStaticSensor(SensorEntity):
         try:
             value = await self._processor.client.read_gatt_char(self._uuid)
             decoded = bytes(value).decode(errors="ignore")
-            self._attr_native_value = decoded  # <-- update de waarde
+            self._attr_native_value = decoded
         except Exception as e:
             _LOGGER.warning(f"Failed to read {self._uuid}: {e}")
+
+
+
+
+
+
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
     processor = hass.data[DOMAIN][config_entry.entry_id]
     address = config_entry.data.get("address")
     device_type = config_entry.data.get("device_type", "Geberit Duo Fresh")
 
-    characteristic_map = CHARACTERISTIC_MAP
-
     gatt_data = {}
 
+    # Probeer alle gedefinieerde BLE-characteristics op te halen
     if processor.client and processor.client.is_connected:
-        for uuid, name in characteristic_map.items():
+        for uuid, name in CHARACTERISTIC_MAP.items():
             try:
                 value = await processor.client.read_gatt_char(uuid)
-                gatt_data[name] = bytes(value).decode(errors="ignore")
+                decoded = bytes(value).decode(errors="ignore")
+                gatt_data[name] = decoded
             except Exception as e:
                 _LOGGER.warning(f"Failed to read {name} ({uuid}): {e}")
+    else:
+        _LOGGER.warning("BLE client is not connected during setup. Sensors may initialize with empty values.")
 
+    # Bepaal apparaat-informatie met fallbacks
     model_id = gatt_data.get("Model Number", device_type)
-    serial = gatt_data.get("Serial Number", address)
-    sw_version = gatt_data.get("Software Revision", "")
-    hw_version = gatt_data.get("Hardware Revision", "")
-    firmware_version = gatt_data.get("Firmware Revision", "")
+    serial = gatt_data.get("Serial Number") or address or "unknown_serial"
+    sw_version = gatt_data.get("Software Revision", "0")
+    hw_version = gatt_data.get("Hardware Revision", "0")
 
     entities = []
     for uuid, name in CHARACTERISTIC_MAP.items():
-        value = gatt_data.get(name)
-        entities.append(
-            GeberitStaticSensor(
-                processor, uuid, name, address, serial, model_id,
-                value=value,
-                sw_version=sw_version,
-                hw_version=hw_version,
-                firmware_version=firmware_version,
-                device_type=device_type
-            )
+        value = gatt_data.get(name)  # Kan ook None zijn
+        sensor = GeberitStaticSensor(
+            processor=processor,
+            uuid=uuid,
+            name=name,
+            address=address,
+            serial=serial,
+            model=model_id,
+            value=value,
+            sw_version=sw_version,
+            hw_version=hw_version,
+            device_type=device_type
         )
+        entities.append(sensor)
+
     async_add_entities(entities)
-
-    manufacturer = gatt_data.get("Manufacturer", "Geberit")
-
-    device_registry = dr.async_get(hass)
-    device_registry.async_get_or_create(
-        config_entry_id=config_entry.entry_id,
-        identifiers={(DOMAIN, serial)},
-        connections={(dr.CONNECTION_NETWORK_MAC, address)},
-        manufacturer=manufacturer,
-        name=f"{device_type}",
-        suggested_area="Bathroom",
-        via_device=(DOMAIN, address)
-    )
