@@ -26,14 +26,14 @@ STATE_CLASS_MAP = {}
 
 class GeberitStaticSensor(SensorEntity):
     def __init__(
-        self, processor, uuid, name, address, serial, model, value=None, sw_version=None, hw_version=None, firmware_version=None
+        self, processor, uuid, name, address, serial, model, value=None, sw_version=None, hw_version=None, firmware_version=None, device_type=None
     ):
         self._processor = processor
         self._uuid = uuid
         self._address = address
         self._serial = serial  # uniek per apparaat
         self._attr_name = name
-        self._attr_unique_id = f"geberit_sensor_{uuid.replace('-', '')}"
+        self._attr_unique_id = f"geberit_sensor_{self._serial}_{uuid.replace('-', '')}"
 
         self._attr_device_class = DEVICE_CLASS_MAP.get(name)
         self._attr_unit_of_measurement = UNIT_MAP.get(name)
@@ -43,6 +43,8 @@ class GeberitStaticSensor(SensorEntity):
         self._hw_version = hw_version
         self._firmware_version = firmware_version
         self._attr_native_value = value  # <-- waarde van de characteristic
+        self._attr_should_poll = True
+        self._device_type = device_type
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -50,7 +52,7 @@ class GeberitStaticSensor(SensorEntity):
             identifiers={(DOMAIN, self._serial)},
             connections={(dr.CONNECTION_NETWORK_MAC, self._address)},
             manufacturer="Geberit",
-            name="Geberit Toilet",
+            name=self._device_type,  # <-- gebruik device_type als naam
             model=self._model,
             sw_version=self._sw_version,
             hw_version=self._hw_version,
@@ -84,7 +86,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
             except Exception as e:
                 _LOGGER.warning(f"Failed to read {name} ({uuid}): {e}")
 
-    model_id = gatt_data.get("Model Number", device_type)
+    model_id = gatt_data.get("Model Number", "Unknown Model")
     serial = gatt_data.get("Serial Number", address)
     sw_version = gatt_data.get("Software Revision", "")
     hw_version = gatt_data.get("Hardware Revision", "")
@@ -116,7 +118,8 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                     value=value,
                     sw_version=sw_version,
                     hw_version=hw_version,
-                    firmware_version=firmware_version
+                    firmware_version=firmware_version,
+                    device_type=device_type  # <-- voeg toe
                 )
             )
         except Exception as e:

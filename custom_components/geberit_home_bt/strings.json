@@ -11,7 +11,7 @@
       }
     },
     "error": {
-      "invalid_mac": "Invalid MAC address.",
+      "invalid_mac": "Invalid MAC address",
       "invalid_type": "Invalid device type selected."
     }
   }
