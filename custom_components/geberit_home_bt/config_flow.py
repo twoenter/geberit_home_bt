@@ -41,3 +41,20 @@ class GeberitConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 "type_help": "Select your Geberit device type"
             },
         )
+
+    async def async_step_bluetooth(self, discovery_info):
+        """Handle a flow initialized by a bluetooth discovery."""
+        address = discovery_info.get("address")
+        device_type = "Geberit Toilet"  # Of bepaal type op basis van discovery_info
+
+        # Controleer of er al een entry bestaat voor dit adres
+        await self.async_set_unique_id(address)
+        self._abort_if_unique_id_configured()
+
+        return self.async_create_entry(
+            title=f"Geberit ({address})",
+            data={
+                "address": address,
+                "device_type": device_type,
+            }
+        )
