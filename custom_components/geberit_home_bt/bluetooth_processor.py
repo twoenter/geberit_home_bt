@@ -1,7 +1,7 @@
 import logging
 import asyncio
 from bleak import BleakClient
-from .const import WRITE_HANDLE
+from .const import WRITE_HANDLE, NOTIFY_UUIDS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -15,6 +15,7 @@ class BluetoothProcessor:
         self.watchdog_task = None
         self._char_cache = {}
         self._excluded_chars = set()
+        self.notify_values = {}
 
     async def connect(self):
         if self.client and self.client.is_connected:
@@ -37,6 +38,12 @@ class BluetoothProcessor:
                         _LOGGER.info(f"Enabling notify on characteristic: {char.uuid} (handle: {char.handle})")
                     except Exception as e:
                         _LOGGER.warning(f"Failed to start notify on {char.uuid}: {e}")
+
+            for uuid in NOTIFY_UUIDS:
+                try:
+                    await self.client.start_notify(uuid, self._notification_handler)
+                except Exception as e:
+                    _LOGGER.warning(f"Failed to start notify on {uuid}: {e}")
 
             # Pas polling-interval aan op basis van type
             interval = 1.0 
@@ -72,9 +79,10 @@ class BluetoothProcessor:
         else:
             _LOGGER.error("Client is not connected; cannot write command")
 
-    def _notification_handler(self, handle, data):
-        self.data = data
-        _LOGGER.info(f"Notification received from {self.device_type}. Handle: {handle}, value: {data.hex()}")
+    def _notification_handler(self, sender, data):
+        # sender is meestal de UUID of handle
+        self.notify_values[sender] = data
+        _LOGGER.info(f"Notification received from {sender}: {data.hex()}")
 
     async def read_notify(self):
         _LOGGER.debug(f"read_notify() called, returning: {self.data.hex() if self.data else 'None'}")

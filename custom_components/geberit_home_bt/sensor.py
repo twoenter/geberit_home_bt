@@ -1,28 +1,5 @@
 import logging
 from homeassistant.components.sensor import SensorEntity
-from homeassistant.helpers import device_registry as dr
-from homeassistant.helpers.device_registry import DeviceInfo
-from .const import DOMAIN
-
-_LOGGER = logging.getLogger(__name__)
-
-# BLE Characteristics for both Duo Fresh and Mera Classic
-CHARACTERISTIC_MAP = {
-    "00002a24-0000-1000-8000-00805f9b34fb": "Model Number",
-    "00002a25-0000-1000-8000-00805f9b34fb": "Serial Number",
-    "00002a26-0000-1000-8000-00805f9b34fb": "Firmware Revision",
-    "00002a27-0000-1000-8000-00805f9b34fb": "Hardware Revision",
-    "00002a28-0000-1000-8000-00805f9b34fb": "Software Revision",
-    "00002a29-0000-1000-8000-00805f9b34fb": "Manufacturer"
-}
-
-DEVICE_CLASS_MAP = {
-    "Firmware Revision": "firmware",
-}
-
-
-import logging
-from homeassistant.components.sensor import SensorEntity
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -36,7 +13,10 @@ CHARACTERISTIC_MAP = {
     "00002a26-0000-1000-8000-00805f9b34fb": "Firmware Revision",
     "00002a27-0000-1000-8000-00805f9b34fb": "Hardware Revision",
     "00002a28-0000-1000-8000-00805f9b34fb": "Software Revision",
-    "00002a29-0000-1000-8000-00805f9b34fb": "Manufacturer"
+    "00002a29-0000-1000-8000-00805f9b34fb": "Manufacturer",
+    "3334429d-90f3-4c41-a02d-5cb3a53e0000": "Notify Sensor 1",
+    "3334429d-90f3-4c41-a02d-5cb3a63e0000": "Notify Sensor 2",
+    "3334429d-90f3-4c41-a02d-5cb3a73e0000": "Notify Sensor 3"
 }
 
 DEVICE_CLASS_MAP = {
@@ -96,8 +76,34 @@ class GeberitStaticSensor(SensorEntity):
 
 
 
+class GeberitNotifySensor(SensorEntity):
+    def __init__(self, processor, uuid, name, address, serial, model, device_type=None):
+        self._processor = processor
+        self._uuid = uuid
+        self._address = address
+        self._serial = serial
+        self._attr_name = name
+        self._attr_unique_id = f"geberit_notify_{serial}_{uuid.replace('-', '')}"
+        self._model = model
+        self._device_type = device_type
 
+    @property
+    def native_value(self):
+        # Haal de laatste waarde op uit de processor
+        value = self._processor.notify_values.get(self._uuid)
+        if value is not None:
+            return value.hex()
+        return None
 
+    @property
+    def device_info(self) -> DeviceInfo:
+        return DeviceInfo(
+            identifiers = {(DOMAIN, self._serial)},
+            connections = {(dr.CONNECTION_NETWORK_MAC, self._address)},
+            manufacturer = "Geberit",
+            name = self._device_type or self._model,
+            model = self._model,
+        )
 
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
